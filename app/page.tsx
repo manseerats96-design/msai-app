@@ -43,8 +43,8 @@ function handleImage(event: React.ChangeEvent<HTMLInputElement>) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          message: currentMessage,
-        }),
+  messages: [...messages, userMessage],
+}),
       });
 
       const data = await response.json();
