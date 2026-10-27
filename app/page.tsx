@@ -2,6 +2,26 @@
 
 import { useEffect, useRef, useState } from "react";
 
+type SpeechResult = {
+  results: ArrayLike<ArrayLike<{ transcript: string }>>;
+};
+
+type SpeechRecognitionInstance = {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  onresult: ((event: SpeechResult) => void) | null;
+  onerror: (() => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+};
+
+type SpeechWindow = Window & {
+  SpeechRecognition?: new () => SpeechRecognitionInstance;
+  webkitSpeechRecognition?: new () => SpeechRecognitionInstance;
+};
+
 type Message = {
   role: "user" | "ai";
   text: string;
@@ -23,6 +43,114 @@ export default function Home() {
   const [historyLoaded, setHistoryLoaded] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+function speakJarvis(text: string) {
+    if (!("speechSynthesis" in window)) return;
+
+  const synth = window.speechSynthesis;
+  synth.cancel();
+
+  // Remove emojis, markdown and visual symbols
+  const cleanText = text
+    .replace(/```[\s\S]*?```/g, "")
+    .replace(/https?:\/\/\S+/g, "")
+    .replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu, "")
+    .replace(/[#*_`~>|]/g, "")
+    .replace(/\b(yellow heart|red heart|blue heart)\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!cleanText) return;
+
+  const voices = synth.getVoices();
+
+  const preferredNames = [
+    "Microsoft Ryan",
+    "Microsoft George",
+    "Google UK English Male",
+    "Daniel"
+  ];
+
+  const voice =
+    voices.find(v =>
+      preferredNames.some(name =>
+        v.name.toLowerCase().includes(name.toLowerCase())
+      )
+    ) ||
+    voices.find(v => v.lang === "en-GB") ||
+    voices.find(v => v.lang.startsWith("en"));
+
+  const speech = new SpeechSynthesisUtterance(cleanText);
+
+  if (voice) {
+    speech.voice = voice;
+    speech.lang = voice.lang;
+  } else {
+    speech.lang = "en-GB";
+  }
+
+  speech.rate = 0.98;
+  speech.pitch = 1.0;
+  speech.volume = 1.0;
+
+  speech.onerror = (event) => {
+    console.error("JARVIS speech error:", event.error);
+  };
+
+  synth.speak(speech);
+
+}
+
+
+const [listening, setListening] = useState(false);
+const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+
+function startListening() {
+  const browser = window as SpeechWindow;
+
+  const SpeechRecognition =
+    browser.SpeechRecognition ||
+    browser.webkitSpeechRecognition;
+
+  if (!SpeechRecognition) {
+    alert("Please use Chrome or Edge.");
+    return;
+  }
+
+  if (listening) {
+    recognitionRef.current?.stop();
+    return;
+  }
+
+  const recognition = new SpeechRecognition();
+
+  recognition.lang = "en-IN";
+  recognition.continuous = false;
+  recognition.interimResults = false;
+
+  recognition.onresult = (event) => {
+    const transcript = event.results[0][0].transcript;
+    setInput(transcript);
+  };
+
+  recognition.onerror = () => {
+    setListening(false);
+  };
+
+  recognition.onend = () => {
+    setListening(false);
+  };
+
+  recognitionRef.current = recognition;
+  setListening(true);
+
+  try {
+    recognition.start();
+  } catch {
+    setListening(false);
+  }
+}
+
 
   // Load all chats from browser storage
   useEffect(() => {
@@ -179,6 +307,12 @@ export default function Home() {
           data.error ||
           "MSAI could not generate a response.",
       };
+
+      
+if (response.ok && data.reply) {
+  speakJarvis(aiMessage.text);
+}
+
 
       const currentChatId = chatId;
 
@@ -411,7 +545,9 @@ export default function Home() {
                 }
               }}
               placeholder="Message MSAI..."
-              className="w-full bg-transparent resize-none outline-none text-white placeholder:text-gray-400 min-h-[60px]"
+              className="w-full bg-transparent resize-none outline-none text-white placeholder:text-gray-400 
+              
+          "
             />
 
             <div className="flex items-center justify-between">
@@ -435,13 +571,24 @@ export default function Home() {
                 />
 
                 <button
-                  className="w-10 h-10 rounded-full hover:bg-white/10"
-                  title="Voice - coming later"
-                >
-                  🎙️
-                </button>
+  className="w-10 h-10 rounded-full hover:bg-white/10"
+  title="Voice - coming later"
+>
+  🎙️
+</button>
 
               </div>
+<button
+  type="button"
+  onClick={startListening}
+  className={`w-10 h-10 rounded-full hover:bg-white/10 ${
+    listening ? "bg-red-600 animate-pulse" : ""
+  }`}
+  title={listening ? "Stop listening" : "Talk to JARVIS"}
+>
+  {listening ? "🔴" : "🎙️"}
+</button>
+
 
               <button
                 onClick={sendMessage}
@@ -462,4 +609,4 @@ export default function Home() {
       </section>
     </main>
   );
-}
+}``
